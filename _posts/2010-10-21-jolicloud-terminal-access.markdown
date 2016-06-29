@@ -3,6 +3,7 @@ layout: post
 title:  "Jolicloud terminal access (keyboard shortcuts)"
 date:   2010-10-21 22:34:00
 tags: CLI command-line console Jolicloud keyboard-shortcuts Linux MeeGo netbook OS terminal Ubuntu-Netbook-Remix
+disqus: true
 ---
 
 Disappointed with the usability of the new **Unity interface** in the **Ubuntu Netbook Remix edition** (my screen is not wide enough) I've recently decided to switch my **Linux netbook OS**. My distro of choice was **[MeeGo](http://meego.com/downloads/releases/1.0/meego-v1.0-netbooks)**, but it had some major issues with my **Wi-Fi setup**, so unfortunately I had to let it go. I went for **[Jolicloud](http://www.jolicloud.com)** (project by Netvibes' founder).
