@@ -4,6 +4,7 @@ title:  "U232-P9 USB-Serial adapter drivers"
 date:   2010-01-09 15:18:00
 tags: adapter converter driver PL2303 Prolific Serial U232-P9 USB
 excerpt: <p>My driver CD for the <strong>USB-Serial converter</strong> has gone AWOL, so I had to look for the appropriate file.</p>
+disqus: true
 ---
 
 #### Problem:
@@ -14,7 +15,7 @@ My driver CD for the **USB-Serial converter** has gone AWOL, so I had to look fo
 
 It's a **Prolific chip**, so **[this site](http://www.prolific.com.tw/eng/downloads.asp?ID=31)** should help. I remember **not having any problems with the default driver on my desktop** (**Windows XP**). However, this time I had to use the adapter with my **netbook** (also **Windows XP**), and it **didn't work** with the **device manager** stating:
 
-This device cannot start. (Code 10)
+```This device cannot start. (Code 10)```
 
 #### Solution:
 

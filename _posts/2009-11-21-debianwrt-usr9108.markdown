@@ -1,0 +1,144 @@
+---
+layout: post
+title:  "DebianWRT on USR9108 struggle"
+date:   2009-11-21 11:51:00
+tags: chroot Debian debootstrap Debug-VM embedded-system file-transfer FPU-emulation Kamikaze kernel-panic Lighttpd MIPS_FPU_EMU OpenWrt rdiff-backup Samba smbd swap USB USR9108
+disqus: true
+---
+
+Straight to the matter - yes, it's possible. In fact I've been happily using a **Debian system** on my **US Robotics USR9108** for more than a month. Or at least sort of Debian, but I will explain this later.
+
+Getting **USR9108 to work flawlessly with OpenWrt** alone was quite a struggle, so **pushing the limits to Debian package support** had to be, for the least, problematic. On the way, I promised myself I will write down all the steps and intricacies, and assemble it into a tidy wiki-page. Of course, when I finally got a stable device, I had enough of embedded Debian and at the same time I was delighted I can finally use it to some real purpose. And so my idea for a wiki-page was lost, but I thought **not writing at all would be a real waste**. Weeks after the original feat it's a tad hard to remember all the minute details, so please excuse the lack of coherence and my cryptic notes here. But in a matter of months I wouldn't be able to assemble even this, so that was my last shot at producing anything useful here. **Treat this as a draft** - if something seems not clear enough - drop me a line, maybe I will be able to reconstruct it in some way.
+
+#### Installing OpenWrt on USR9108
+
+First things first. You should be able to **comfortably flash the router with some bleeding edge OpenWrt (Kamikaze)**. There's a lot of material about OpenWrt installation on various hardware, **USR9108** is not much different. A **detailed method can be found [here](http://eko.one.pl/index.php?page=openwrt-usr9108)** (in Polish) - you can try [Google Translate](http://translate.google.com/translate?js=y&prev=_t&hl=en&ie=UTF-8&u=http%3A%2F%2Feko.one.pl%2Findex.php%3Fpage%3Dopenwrt-usr9108&sl=pl&tl=en&history_state0=) on it.
+
+A short list of **things to set when invoking `make menuconfig`**:
+
+*   Target System: **Broadcom BCM63xx**
+*   Target Profile: **Broadcom WiFi**
+*   Target Images: **squashfs**
+
+*   Kernel modules - Filesystems:
+    *   Built-in:
+        *   **kmod-fs-ext3**
+    *   Packages:
+        *   kmod-fs-ext2
+        *   kmod-fs-ntfs
+        *   kmod-fs-vfat
+        *   kmod-nls-cp-1250
+        *   kmod-nls-cp-437
+        *   kmod-nls-iso8859-1
+        *   kmod-nls-iso8859-2
+        *   kmod-nls-utf8
+*   Kernel modules - USB Support:
+    *   Built-in:
+        *   **kmod-usb-core**
+        *   **kmod-usb-ohci**
+        *   **kmod-usb-storage**
+    *   Packages:
+        *   kmod-usb-printer
+
+*   Utilities - Filesystem: e2fsprogs/tune2fs - can be handy
+*   Utilities: kexec-tools - needed for some fancy booting and real Debian support
+
+*   Base system - qos-scripts: I have them as package, as they were giving me some problems
+
+**This is not the complete list**, and of course it depends on your needs. I am using my **USR9108** as a **standalone low-power** (around 10W + enclosure) **mini-server** without its wireless capabilities, but with a plugged-in **USB HDD enclosure** **[Spire HandyBook 3.5 IDE](http://www.spirecoolers.com/main/product_detail.asp?ProdID=775)** (**Prolific PL-2506 chipset**, so Linux support isn't problematic) and some old hard drive. At first I wasn't sure about the filesystem, that's why the package list is so abundant. Now I see that ext3 alone would suffice in my case.
+
+#### Customizing for Debian support
+
+Theoretically, there's only **one custom thing needed for Debian chrooting**. If you look at this [OpenWrt ticket](https://dev.openwrt.org/ticket/5448) - **FPU emulation was dropped on the way**. **For proper chrooting it has to be re-enabled**. I remember I had some **problems with this using trunk revision 17584**, and I finished doing it **both by `make kernel_menuconfig` and applying some manual patches**. The aim is to **enable MIPS_FPU_EMU**. This should be probably getting more user-friendly as I see from [here](https://dev.openwrt.org/ticket/5774).
+
+Just a note on the side, it's good time to think about **netconsole functionality** - it can save you if your serial console access is problematic.
+
+#### Installing Debian software
+
+Yes, I call it Debian software here, as I didn't really need full-blown Debian. I was missing some rare packages, which were hot and ready, waiting for download in the **Debian mips repositories**. Not having to compile them manually was a real time-saver. So in my case a **chrooted Debian was enough** - I tried **kexec**, which theoretically should work to make a real Debian boot, but there were too many problems with it.
+
+OK, to the point - the technique used for creating chrooted Debian environment is **invoking `debootstrap --foreign`** on some i386 system. I won't be rewriting it here - if you want to know more, check this **[post by Lucas Nussbaum](http://www.lucas-nussbaum.net/blog/?p=228)**. Just be sure to **set up some swap space** on the external drive, as the built-in memory is not enough. And if you can, try to install every needed package now, on the workstation. **Using apt-get on the router** itself is way too painful (though I had to do it, I admit).
+
+Another similar method can be seen [here](http://web.archive.org/web/20080501210113/http://wiki.wl500g.info/index.php/Debian+Distribution).
+
+This way you should have a working environment with a full Debian system that you can chroot into. If you only want to run some additional packages and not replace OpenWrt completely, this should be enough.
+
+#### Problems
+
+Now it looks quite easy, but believe me, it wasn't. As always **some small bugs** got on the way.
+
+When I got my system **up and running with smbd**, the router would **reboot every time a bigger transfer was initiated**. Files under 1 MB would normally go without problems, though not always, but 100 MB transfers would fail randomly after some seconds to a minute. It was really hard to pin down as no error messages could be seen. Without netconsole I had to connect the serial one in the end. As suspected a **kernel panic** popped up every now and then:
+
+```
+Kernel bug detected[#1]:  
+Cpu 0  
+$ 0   : 00000000 10008400 8094d1a0 00030201  
+$ 4   : 8094d1a0 00030000 0000004a 00000002  
+$ 8   : 66676869 6d6e6f70 71727374 75767761  
+$12   : 00000000 00000000 00000000 80000000  
+$16   : 80cf3412 8094d1a0 8094d1a0 0000004a  
+$20   : a08e41b8 803c6800 803c6b84 00000010  
+$24   : 00000000 800253a0                    
+$28   : 8023c000 8023dde8 803c6b60 8014a748  
+Hi    : 00000000  
+Lo    : 00000000  
+epc   : 80175e60 0x80175e60  
+Not tainted  
+ra    : 8014a748 0x8014a748  
+Status: 10008403    KERNEL EXL IE  
+Cause : 00800034  
+PrId  : 00029107 (Broadcom BCM6348)  
+Modules linked in: bcm63xx_spi spi_bitbang usb_storage ohci_hcd ebt_redirect ebt_mark ebt_vlan ebt_stp ebt_pkttype ebt_mark_m ebt_limit ebt_among ebt_802_3 ebtable_nat ebtable_filter ebtable_broute ebtables arptable_filter arpt_mangle arp_tables nf_nat_tftp nf_conntrack_tftp nf_nat_irc nf_conntrack_irc nf_nat_ftp nf_conntrack_ftp xt_string xt_layer7 ipt_MASQUERADE iptable_nat nf_nat xt_CONNMARK ipt_recent xt_helper xt_conntrack xt_connmark xt_connbytes xt_NOTRACK iptable_raw xt_state nf_conntrack_ipv4 nf_conntrack sd_mod ipt_REJECT xt_TCPMSS ipt_LOG xt_multiport xt_mac xt_limit iptable_mangle iptable_filter ip_tables xt_tcpudp x_tables ext3 jbd usbcore ts_fsm ts_bm ts_kmp switch_adm switch_robo switch_core scsi_mod arc4 aes_generic deflate ecb cbc cryptomgr crypto_hash crypto_blkcipher aead crypto_algapi  
+Process swapper (pid: 0, threadinfo=8023c000, task=8023e168, tls=00000000)  
+Stack : 0000000a 0000012c ef33f9b0 803c6800 803c6b60 8014a748 80051560 80051398  
+00000000 00000000 80240288 00000001 00000000 36d62a43 803c6b84 00000010  
+0000000a 0000012c ef33f9b0 00013d4e 00000000 00000000 8041eb98 8018010c  
+8027b880 00000010 00000000 8027b6f4 00000000 8027b6e0 0000000a 80270000  
+ef33f9b0 fd751fe9 8003cbc8 80270000 ef33f9b0 fd751fe9 00000000 00000000  
+...  
+Call Trace:[<8014a748>] 0x8014a748  
+[<80051560>] 0x80051560  
+[<80051398>] 0x80051398  
+[<8018010c>] 0x8018010c  
+[<8003cbc8>] 0x8003cbc8  
+[<8003ccac>] 0x8003ccac  
+[<8001bf50>] 0x8001bf50  
+[<80010444>] 0x80010444  
+[<80010660>] 0x80010660  
+[<8001d368>] 0x8001d368  
+[<80010680>] 0x80010680  
+Code: 8c9000a4  8c83005c  03e03021 <00038036> 8c830058  8c8700a8  02054021  00651821  00e8382b  
+Kernel panic - not syncing: Fatal exception in interrupt  
+Rebooting in 3 seconds..<6>triggering watchdog soft-reset...
+```
+
+Apart from that, the system was running quite fine (taking into consideration it's limited resources). This kind of log was not too informative, so I **recompiled the kernel with additional debugging routines and symbols** to get at least a hint of what's going on. Now I don't recall all the things, but for sure in the global config I set:
+
+*   Global build settings - Compile the kernel with symbol table information
+*   Global build settings - Compile the kernel with Debug Filesystem enabled
+
+and in kernel config:
+
+*   Kernel hacking: Compile the kernel with debug info
+*   Kernel hacking: Debug VM
+*   Kernel hacking: Kernel debugging
+
+That's what I see now from a quick glance at the configs. And call it as you like, but this seems as a natural perversity of inanimate objects. **The moment I had debug kernel loaded, everything ceased**. All the transfers are rock-solid, my uptime right now is 23 days, and I didn't have any problems with this system. I didn't bother to verify what was the underlying cause. I presume **Debug VM option** could change something. What's important is even a debug version of the kernel seems to be usable.
+
+#### DebianWRT usage
+
+OK, so to sum up, a brief note on the things and services I've managed to set-up thanks to .deb support, and a short disclaimer about production use. **Most of this can be done with OpenWrt itself**, so be sure you really need something fancy from Debian.
+
+*   **Samba daemon** - usable, I get **around 700 kB/s to 1 MB/s rates** (100 Mb Ethernet), which is more or less my wireless throughput. **Authentication and login are painfully slow** <span style="color: #808080;">[**edit:** I've **replaced it with proftpd**, not so convenient maybe, but way more responsive]</span>
+*   **Lighttpd, PHP5 and sqlite** - the same - **usable and adequate for tiny scripts** (LAN monitoring etc.), but don't expect to host anything serious here
+*   **dropbear/sshd** - no problem, in fact I have dropbear all the time for the base system and sshd on-demand for Debian chrooted environment
+*   **Subversion** - for my needs it's OK (**small projects**, 1 developer, only a way to backup in case of emergency), beware however - **Websvn will kill the machine** in an instant
+*   **rdiff-backup** and **rsync** - if you can live with USB 1.1 HDD performance, then it's a nice way to backup remote hosts in the background
+*   **wget** - a must for background downloading
+*   plus some other small tools I could only find precompiled for Debian
+
+I have some other small tools installed, but the bottom point is - **you can install anything, the only problem is lack of memory**. With **16 MB built-in** (in fact there's around 13 MB available for system) I normally have around 8 MB used and 5 MB in buffers/cache. Swap with all daemons on, but idle - around 7 MB used. **This makes it a "single-tasking" system**. For instance the performance you get once a SMB session is initiated (LAN MP3 streaming) is **satisfactory**, but try using the router's webpage, and everything will halt for 10-20 seconds. I found **some workarounds** (in **Winamp adjust buffering in the DirectSound output plugin "out_ds"**, this should suffice and doesn't introduce the **prefetch delay of "full file buffering"** setting), but in the end **32 MB RAM is a minimum for any real work**. And 64 MB wouldn't harm either, I suppose. However, there are **things so geek you just have to try them**, and **installing full-blown Debian on an appliance** was one of them. Still, if you need something even more twisted, and art for art's sake is what you like - check [here](http://wiki.debian.org/DebianWRT) for some methods of **getting the router to boot a real Debian kernel** and bypass OpenWrt completely. For me that was enough.
+
+![](file:///C:/DOCUME%7E1/Karol/USTAWI%7E1/Temp/moz-screenshot-4.png)
+
+![](file:///C:/DOCUME%7E1/Karol/USTAWI%7E1/Temp/moz-screenshot-3.png)
